@@ -1,0 +1,116 @@
+---
+title: "PracticalMachineLearning_BarbellLifts"
+author: "Claire Pierreclos"
+date: "January 20, 2020"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(fig.path = "PracticalMachineLearning_BarbellLifts/", dpi = 144)
+set.seed(1)
+library(ggplot2, warn.conflicts = FALSE)
+library(car, warn.conflicts = FALSE)
+```
+
+## Executive summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project,we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Library
+```{r}
+library(caret)
+library(rattle)
+```
+
+## Basic data analysis
+```{r}
+set.seed(1500)
+setwd("C:/Users/mec/OneDrive - Trivadis AG/Data Science/R working directory/Cours 8 - Practical Machine Learning/Course project")
+data_training <- read.csv("pml-training.csv")
+data_testing <- read.csv("pml-testing.csv")
+dim(data_training)
+index_Training <- createDataPartition(data_training$classe, p = 0.7, list = FALSE)
+training <- data_training[index_Training, ]
+testing <- data_training[-index_Training, ]
+validating <- data_testing
+dim(training)
+```
+The training dataset contains a data frame with 19622 observations on 160 columns.
+We split this dataset in a train dataset of 13737 observations and a test dataset of 5885 observations
+The other dataset will be the validation dataset of 20 observations.
+
+## Cleaning data
+```{r}
+str(training)
+```
+We can observe many NA values or blank values that we need to remove because they will not give to us any information.
+And the columns 1 to 7 contain information about people who did the test and timestamp so information not relevant for our model. We remove these columns for the 3 datasets: training, testing and validating.
+
+```{r}
+# Remove columns with too much NA or blank values
+indexRemoveTraining <- which(colSums(is.na(training) |training=="")>0.9*dim(training)[1]) 
+indexRemoveTesting <- which(colSums(is.na(testing) |testing=="")>0.9*dim(testing)[1]) 
+indexRemoveValidating <- which(colSums(is.na(validating) |validating=="")>0.9*dim(validating)[1]) 
+training <- training[,-indexRemoveTraining]
+testing <- testing[,-indexRemoveTesting]
+validating <- validating[,-indexRemoveValidating]
+# Remove 7 first columns
+training <- training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+validating <- validating[, -c(1:7)]
+dim(training)
+dim(testing)
+dim(validating)
+```
+We now have 53 columns for each datasets.
+
+## Training - Classification Tree
+
+```{r}
+model_ClassTree <- train(classe~., data=training, method="rpart", trControl=trainControl(method="cv", number=5))
+fancyRpartPlot(model_ClassTree$finalModel)
+predict1_Train <- predict(model_ClassTree,newdata=testing)
+matrix1_Train <- confusionMatrix(testing$classe,predict1_Train)
+matrix1_Train$table
+matrix1_Train$overall
+```
+We can remark the accuracy is low with the classification tree model: (around 48%).
+The out of sample error is 0.518.
+This means that the outcome class will not be predicted very well by the other predictors.
+
+## Training - Random Forest
+
+```{r}
+model_RandForest <- train(classe~., data=training, method="rf", trControl=trainControl(method="cv", number=5),verbose=FALSE)
+print(model_RandForest)
+plot(model_RandForest,main="Accuracy of Random forest model by number of predictors")
+predict2_Train <- predict(model_RandForest,newdata=testing)
+matrix2_Train <- confusionMatrix(testing$classe,predict2_Train)
+matrix2_Train$table
+matrix2_Train$overall
+```
+With the random forest, the accuracy is better (around 99%) using cross-validation with 5 steps (it can take several minutes to do the model). The out of sample error is 0.01.
+
+## Training - Gradient Boosting
+
+```{r}
+model_GradBoost <- train(classe~., data=training, method="gbm", trControl=trainControl(method="cv", number=5),verbose=FALSE)
+print(model_GradBoost)
+plot(model_GradBoost,main="Accuracy of Gradient Boosting model by number of predictors")
+predict3_Train <- predict(model_GradBoost,newdata=testing)
+matrix3_Train <- confusionMatrix(testing$classe,predict3_Train)
+matrix3_Train$table
+matrix3_Train$overall
+```
+With the Gradient Boostiong method, the accuracy is around 96%. The out of sample error is 0.042.
+
+## Conclusion
+We can see the best accuracy is permitting with the Random Forest model with 99% () and an out of sample error of 
+So we will use this model to predict for the test data set
+```{r}
+predict_Test <- predict(model_RandForest,newdata=validating)
+predict_Test
+```
